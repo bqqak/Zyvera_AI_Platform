@@ -105,7 +105,14 @@ function Home() {
         <section id="pricing" className="w-full max-w-6xl mt-24 mb-20">
           <h2 className="font-bold text-3xl p-5 text-center">Select Plan</h2>
           <div className="mt-2">
-            <PricingTable />
+            {process.env.NEXT_PUBLIC_STRIPE_PRICING_TABLE_ID && process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ? (
+              <PricingTable
+                pricingTableId={process.env.NEXT_PUBLIC_STRIPE_PRICING_TABLE_ID}
+                publishableKey={process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
+              />
+            ) : (
+              <PricingTable />
+            )}
           </div>
         </section>
       </main>

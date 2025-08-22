@@ -4,7 +4,7 @@ import {
 import {auth, currentUser} from "@clerk/nextjs/server";
 import {NextResponse} from "next/server";
 import {db} from "@/config/db";
-import {coursesTable} from "@/config/schema";
+import {coursesTable, usersTable} from "@/config/schema";
 import axios from "axios";
 import {eq} from "drizzle-orm";
 
@@ -31,59 +31,67 @@ Schema:
   }
 }, User Input:`
 export async function POST(req) {
-    const {courseId, ...formData} = await req.json();
-    const user = await currentUser();
-    const { has } = await auth()
-    const hasPremiumAccess = has({ plan: 'plus' })
+    try {
+        const {courseId, ...formData} = await req.json();
+        const user = await currentUser();
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const userEmail = user?.primaryEmailAddress?.emailAddress;
+        const userName = user?.fullName || 'New User';
+        if (!userEmail) {
+            return NextResponse.json({ error: 'Email not found for user' }, { status: 400 });
+        }
+
+        // Ensure user exists in DB to satisfy FK constraint for courses.userEmail
+        const existing = await db.select().from(usersTable).where(eq(usersTable.email, userEmail));
+        if (!existing || existing.length === 0) {
+            await db.insert(usersTable).values({ name: userName, email: userEmail }).returning();
+        }
+
+        const { has } = await auth();
+        const hasPremiumAccess = has({ plan: 'plus' });
+
         const ai = new GoogleGenAI({
             apiKey: process.env.GEMINI_API_KEY,
         });
-        const config = {
-            responseMimeType: 'text/plain',
-        };
+        const config = { responseMimeType: 'text/plain' };
         const model = 'gemini-2.0-flash';
         const contents = [
-            {
-                role: 'user',
-                parts: [
-                    {
-                        text: PROMPT+JSON.stringify(formData),
-                    }
-                ]
-            }
+            { role: 'user', parts: [ { text: PROMPT + JSON.stringify(formData) } ] }
         ];
 
-        if(!hasPremiumAccess) {
-            const result = await db.select().from(coursesTable)
-                .where(eq(coursesTable.userEmail, user?.primaryEmailAddress?.emailAddress))
-            if(result?.length >= 1)
-            {
-                return NextResponse.json({'resp' : 'limit exceed'})
+        if (!hasPremiumAccess) {
+            const existingCourses = await db
+                .select()
+                .from(coursesTable)
+                .where(eq(coursesTable.userEmail, userEmail));
+            if (existingCourses?.length >= 1) {
+                return NextResponse.json({ resp: 'limit exceed' });
             }
         }
-        const response = await ai.models.generateContent({
-            model,
-            config,
-            contents,
+
+        const response = await ai.models.generateContent({ model, config, contents });
+        const RawResp = response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const RawJson = RawResp.replace('```json', '').replace('```', '');
+        const JSONResp = JSON.parse(RawJson);
+        const ImagePrompt = JSONResp?.course?.bannerImagePrompt || '';
+
+        const bannerImageUrl = await GenerateImage(ImagePrompt);
+
+        await db.insert(coursesTable).values({
+            ...formData,
+            courseJson: JSONResp,
+            userEmail: userEmail,
+            cid: courseId,
+            bannerImageUrl: bannerImageUrl,
         });
-        console.log(response.candidates[0].content.parts[0].text);
-        const RawResp = response?.candidates[0]?.content?.parts[0]?.text
-        const RawJson = RawResp.replace('```json', '').replace('```', '')
-    const JSONResp = JSON.parse(RawJson)
-    const ImagePrompt = JSONResp.course?.bannerImagePrompt;
 
-    const bannerImageUrl = await GenerateImage(ImagePrompt);
-
-    const result = await db.insert(coursesTable).values({
-        ...formData,
-        courseJson: JSONResp,
-        userEmail: user?.primaryEmailAddress?.emailAddress,
-        cid: courseId,
-        bannerImageUrl: bannerImageUrl,
-    });
-
-    return NextResponse.json({courseId: courseId})
-
+        return NextResponse.json({ courseId: courseId });
+    } catch (e) {
+        console.error('/api/generate-course-layout error:', e);
+        return NextResponse.json({ error: 'Failed to generate course' }, { status: 500 });
+    }
 }
 
 const GenerateImage = async(imagePrompt) => {
