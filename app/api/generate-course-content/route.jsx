@@ -2,9 +2,9 @@ import axios from "axios";
 import { db } from "@/config/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ai } from "../generate-course-layout/route";
 import { coursesTable } from "@/config/schema";
 import { currentUser } from "@clerk/nextjs/server";
+import { GoogleGenAI } from "@google/genai";
 
 const PROMPT = `Depends on Chapter name and Topic Generate content for each topic in HTML
 and give response in JSON format.
@@ -18,6 +18,7 @@ content:<>
 : User Input:
 `;
 export async function POST(req) {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   try {
     const { course, courseJson, courseTitle, courseId } = await req.json();
 
