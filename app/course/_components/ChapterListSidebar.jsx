@@ -25,7 +25,7 @@ function ChapterListSidebar({courseInfo}) {
                             {index + 1}. {chapter?.courseData?.chapterName || `Chapter ${index + 1}`}</AccordionTrigger>
                         <AccordionContent asChild>
                             <div>
-                                {chapter?.courseData?.topics.map((topic, index_) => (
+                                {(Array.isArray(chapter?.courseData?.topics) ? chapter.courseData.topics : []).map((topic, index_) => (
                                     <h2 key={index_} className={`p-2  my-1 rounded-lg ${completedChapter.includes(index) ? 'bg-green-100 text-green-800' : 'bg-white'}`}>{topic?.topic}</h2>
                                 ))}
                             </div>

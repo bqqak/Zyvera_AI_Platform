@@ -5,6 +5,8 @@ import ChapterListSidebar from "@/app/course/_components/ChapterListSidebar";
 import ChapterContent from "@/app/course/_components/ChapterContent";
 import axios from "axios";
 import {useParams} from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 function Course() {
     const {courseId} = useParams();
@@ -27,6 +29,13 @@ function Course() {
     return(
         <div>
             <AppHeader hideSidebar={true}/>
+            <div className={'px-5 relative h-0'}>
+                <div className={'absolute'}>
+                    <Link href={'/workspace/view-course/' + courseId}>
+                        <Button variant={'outline'}>{'Back ->'}</Button>
+                    </Link>
+                </div>
+            </div>
             <div className={'flex gap-10'}>
                 <ChapterListSidebar courseInfo={courseInfo} />
                 <ChapterContent courseInfo={courseInfo} refreshData={GetEnrolledCourseById} />

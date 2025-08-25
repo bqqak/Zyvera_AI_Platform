@@ -44,16 +44,56 @@ export async function POST(req) {
           ],
         },
       ];
-      const response = await ai.models.generateContent({
-        model,
-        config,
-        contents,
-      });
+      let JSONResp = {};
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          config,
+          contents,
+        });
+        const RawResp = response?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const RawJson = RawResp.replace("```json", "").replace("```", "").trim();
+        if (RawJson) {
+          try {
+            JSONResp = JSON.parse(RawJson);
+          } catch (e) {
+            console.warn("generate-course-content: JSON parse failed for chapter, using fallback.", e?.message || e);
+            // Fallback structure: map topics to objects with empty content
+            const topics = Array.isArray(chapter?.topics) ? chapter.topics : [];
+            JSONResp = {
+              chapterName: chapter?.chapterName || "",
+              topics: topics.map((t) => ({ topic: t, content: "" })),
+              items: topics.map((t) => ({ topic: t, content: "" })),
+            };
+          }
+        }
+      } catch (err) {
+        console.warn("generate-course-content: AI generation failed for chapter, using fallback.", err?.message || err);
+        const topics = Array.isArray(chapter?.topics) ? chapter.topics : [];
+        JSONResp = {
+          chapterName: chapter?.chapterName || "",
+          topics: topics.map((t) => ({ topic: t, content: "" })),
+          items: topics.map((t) => ({ topic: t, content: "" })),
+        };
+      }
+      // Normalize the JSON response to always include a topics array
+      if (Array.isArray(JSONResp?.topics)) {
+        // ok
+      } else if (Array.isArray(JSONResp?.items)) {
+        JSONResp.topics = JSONResp.items;
+      } else if (Array.isArray(chapter?.topics)) {
+        JSONResp.topics = chapter.topics.map((t) => ({ topic: t, content: "" }));
+      } else {
+        JSONResp.topics = [];
+      }
 
-      const RawResp = response?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      const RawJson = RawResp.replace("```json", "").replace("```", "").trim();
-      const JSONResp = RawJson ? JSON.parse(RawJson) : {};
-      const youtubeData = await GetYoutubeVideo(chapter?.chapterName);
+      let youtubeData = [];
+      try {
+        youtubeData = await GetYoutubeVideo(chapter?.chapterName);
+      } catch (yErr) {
+        console.warn("generate-course-content: YouTube fetch failed, continuing without videos.", yErr?.message || yErr);
+        youtubeData = [];
+      }
       return {
         youtubeVideo: youtubeData,
         courseData: JSONResp,
@@ -147,23 +187,28 @@ export async function POST(req) {
 
 const YOUTUBE_BASE_URL = "https://www.googleapis.com/youtube/v3/search";
 const GetYoutubeVideo = async (topic) => {
-  const params = {
-    part: "snippet",
-    q: topic,
-    type: "video",
-    maxResults: 4,
-    key: process.env.YOUTUBE_API_KEY,
-  };
-  const resp = await axios.get(YOUTUBE_BASE_URL, { params });
-  const youtubeVideoListResp = resp.data.items;
-  const youtubeVideoList = [];
-  youtubeVideoListResp.forEach((item) => {
-    const data = {
-      videoId: item?.id?.videoId,
-      title: item?.snippet?.title,
+  try {
+    const params = {
+      part: "snippet",
+      q: topic,
+      type: "video",
+      maxResults: 4,
+      key: process.env.YOUTUBE_API_KEY,
     };
-    youtubeVideoList.push(data);
-  });
-  console.log("youtubeVideoList: ", youtubeVideoList);
-  return youtubeVideoList;
+    const resp = await axios.get(YOUTUBE_BASE_URL, { params });
+    const youtubeVideoListResp = resp?.data?.items || [];
+    const youtubeVideoList = [];
+    youtubeVideoListResp.forEach((item) => {
+      const data = {
+        videoId: item?.id?.videoId,
+        title: item?.snippet?.title,
+      };
+      youtubeVideoList.push(data);
+    });
+    console.log("youtubeVideoList: ", youtubeVideoList);
+    return youtubeVideoList;
+  } catch (err) {
+    console.warn("GetYoutubeVideo: failed to fetch videos, returning empty list.", err?.message || err);
+    return [];
+  }
 };

@@ -7,19 +7,19 @@ function ChapterTopicList({course}) {
         <div>
             <h2 className={'font-bold text-3xl mt-10'}>Chapters & Topics</h2>
             <div className='flex flex-col items-center justify-center mt-10'>
-                {courseLayout?.chapters.map((chapter, index) => (
+                {(Array.isArray(courseLayout?.chapters) ? courseLayout.chapters : []).map((chapter, index) => (
                     <div key={index} className='flex flex-col items-center'>
                         <div className='p-4 border shadow rounded-xl bg-primary text-white'>
                             <h2 className='text-center '>Chapter {index + 1}</h2>
                             <h2 className='font-bold text-lg text-center'>{chapter.chapterName}</h2>
                             <h2 className='text-xs flex justify-between gap-16'>
                                 <span>Duration: {chapter?.duration}</span>
-                                <span>No. Of Chapters: {chapter?.topics?.length}</span>
+                                <span>No. Of Chapters: {Array.isArray(chapter?.topics) ? chapter.topics.length : 0}</span>
                             </h2>
                         </div>
 
                         <div>
-                            {chapter?.topics.map((topic, index) => (
+                            {(Array.isArray(chapter?.topics) ? chapter.topics : []).map((topic, index) => (
                                 <div className='flex flex-col items-center' key={index}>
                                     <div className='h-10 bg-gray-300 w-1'></div>
                                     <div className='flex items-center gap-5'>
